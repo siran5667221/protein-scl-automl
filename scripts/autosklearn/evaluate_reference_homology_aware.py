@@ -1,7 +1,3 @@
-"""Evaluate Reference homology-aware Auto-sklearn workflows.
-Extracted from homology_pipeline_autosklearn.ipynb.
-"""
-
 import argparse
 from pathlib import Path
 
@@ -15,17 +11,6 @@ def main():
     if not args.test_csv.is_file():
         parser.error(f"Test CSV not found: {args.test_csv}")
 
-    """
-    Per-Location Evaluation for Homology / No-Homology AutoSklearn Pipelines
-    ========================================================================
-    对 homology/no-homology 训练得到的 100 个 pipeline 计算每个亚细胞位置的：
-    MCC, F1, Precision, Recall, Support
-
-    适用于你的代码2：
-    ROOT_SAVE_DIR = str(args.model_dir)
-    每个 pipeline 保存为：
-    run_XX/fold_XX/complete_pipeline.pkl
-    """
 
     import os
     import pickle
@@ -43,19 +28,9 @@ def main():
         balanced_accuracy_score
     )
 
-    # ══════════════════════════════════════════════════════
-    # CONFIG — 只需要改这里
-    # ══════════════════════════════════════════════════════
 
-    # 代码2生成的 pipeline 文件夹
     ROOT_SAVE_DIR = str(args.model_dir)
 
-    # 你要测试的数据集
-    # 如果你想测试 no-homology test set，就改成你的 NoHomology test 文件
-    # 例如：
-    # TEST_FILE = str(args.test_csv)
-    # 或：
-    # TEST_FILE = "/home/shuang/siran/Test_Features_NoHomology.csv"
 
     TEST_FILE = str(args.test_csv)
 
@@ -95,13 +70,10 @@ def main():
 
     CLASSES = list(LABEL_NAMES.keys())
 
-    # 输出文件夹
+
     OUTPUT_DIR = str(args.output_dir)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # ══════════════════════════════════════════════════════
-    # 1. 加载测试集
-    # ══════════════════════════════════════════════════════
 
     print("=" * 80)
     print("Loading test dataset")
@@ -110,13 +82,13 @@ def main():
 
     test_df = pd.read_csv(TEST_FILE)
 
-    # label 处理
+
     if LABEL_COL not in test_df.columns:
         raise ValueError(f"Cannot find label column: {LABEL_COL}")
 
     y_test_full = test_df[LABEL_COL].values
 
-    # 如果 label 是字符串，转换成数字
+
     if not np.issubdtype(y_test_full.dtype, np.number):
         print("String labels detected. Mapping labels to numeric IDs...")
         y_test_full = pd.Series(y_test_full).map(LABEL_MAPPING).values
@@ -127,11 +99,11 @@ def main():
 
         y_test_full = y_test_full.astype(int)
 
-    # feature 处理
+
     drop_cols = [c for c in [ID_COL, LABEL_COL] if c in test_df.columns]
     X_test_full = test_df.drop(columns=drop_cols)
 
-    # 只保留数值列，避免 ProteinID 或其他字符列进入模型
+
     X_test_full = X_test_full.select_dtypes(include=[np.number])
 
     print(f"Test feature matrix: {X_test_full.shape}")
@@ -141,15 +113,8 @@ def main():
     print("=" * 80)
 
 
-    # ══════════════════════════════════════════════════════
-    # 2. 工具函数
-    # ══════════════════════════════════════════════════════
-
     def per_location_metrics(y_true, y_pred, classes):
-        """
-        对每一个 class 做 One-vs-Rest 评价。
-        输出每个位置的 MCC, Precision, Recall, F1, Support, TP, FP, FN, TN。
-        """
+
 
         records = []
 
@@ -157,7 +122,7 @@ def main():
             y_true_bin = (y_true == c).astype(int)
             y_pred_bin = (y_pred == c).astype(int)
 
-            # confusion_matrix 在某些极端情况下可能不是 2x2，所以固定 labels=[0,1]
+
             tn, fp, fn, tp = confusion_matrix(
                 y_true_bin,
                 y_pred_bin,
@@ -202,9 +167,7 @@ def main():
 
 
     def overall_metrics(y_true, y_pred):
-        """
-        计算每个 pipeline 的整体指标，方便检查 pipeline 是否正常。
-        """
+
 
         return {
             "MCC": matthews_corrcoef(y_true, y_pred),
@@ -218,13 +181,7 @@ def main():
 
 
     def align_features_to_pipeline(X_test, pipe):
-        """
-        尽量保证测试集特征顺序与训练时一致。
 
-        你的 pipeline 里保存了 selected_features，
-        但 scaler 是在 RFE 前 fitted 的，所以理论上 scaler 需要完整训练特征顺序。
-        如果 scaler 里有 feature_names_in_，优先按它对齐。
-        """
 
         if hasattr(pipe["scaler"], "feature_names_in_"):
             train_feature_order = list(pipe["scaler"].feature_names_in_)
@@ -239,17 +196,13 @@ def main():
                 )
 
             if len(extra) > 0:
-                # 多出来的列不影响，直接丢掉
+
                 X_test = X_test[train_feature_order]
             else:
                 X_test = X_test[train_feature_order]
 
         return X_test
 
-
-    # ══════════════════════════════════════════════════════
-    # 3. 主循环：读取 100 个 pipeline 并评价
-    # ══════════════════════════════════════════════════════
 
     print("\n" + "=" * 80)
     print(f"Start evaluating {REPEATS * OUTER_FOLDS} pipelines")
@@ -284,23 +237,23 @@ def main():
                 with open(pkl_path, "rb") as f:
                     pipe = pickle.load(f)
 
-                # 对齐特征列
+
                 X_test_aligned = align_features_to_pipeline(X_test_full.copy(), pipe)
 
-                # scaler -> rfe -> model
+
                 X_test_scaled = pipe["scaler"].transform(X_test_aligned)
                 X_test_selected = pipe["rfe"].transform(X_test_scaled)
 
                 y_pred = pipe["model"].predict(X_test_selected)
 
-                # 整体指标
+
                 om = overall_metrics(y_test_full, y_pred)
                 om["Run_Fold"] = run_fold_name
                 om["run_id"] = run_id
                 om["fold_id"] = fold_idx
                 all_overall_records.append(om)
 
-                # 每个位置的指标
+
                 loc_df = per_location_metrics(y_test_full, y_pred, CLASSES)
                 loc_df["Run_Fold"] = run_fold_name
                 loc_df["run_id"] = run_id
@@ -322,10 +275,6 @@ def main():
                     "Path": pkl_path
                 })
 
-
-    # ══════════════════════════════════════════════════════
-    # 4. 汇总整体 pipeline 指标
-    # ══════════════════════════════════════════════════════
 
     overall_df = pd.DataFrame(all_overall_records)
 
@@ -383,10 +332,6 @@ def main():
         print("No successful pipeline evaluation.")
 
 
-    # ══════════════════════════════════════════════════════
-    # 5. 汇总 per-location 指标
-    # ══════════════════════════════════════════════════════
-
     print("\n" + "=" * 80)
     print("Per-location performance summary across pipelines")
     print("=" * 80)
@@ -428,10 +373,6 @@ def main():
         location_summary_df = pd.DataFrame()
         print("No per-location result generated.")
 
-
-    # ══════════════════════════════════════════════════════
-    # 6. 保存结果
-    # ══════════════════════════════════════════════════════
 
     overall_path = os.path.join(OUTPUT_DIR, "overall_pipeline_metrics.csv")
     overall_summary_path = os.path.join(OUTPUT_DIR, "overall_pipeline_metrics_summary.csv")

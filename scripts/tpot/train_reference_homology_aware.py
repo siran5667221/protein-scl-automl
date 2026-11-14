@@ -1,7 +1,3 @@
-"""Train Reference homology-aware TPOT workflows.
-See docs/reference_homology_aware_tpot.md for source and cleanup details.
-"""
-
 import argparse
 from pathlib import Path
 
@@ -24,9 +20,7 @@ def main():
     import pandas as pd
     import numpy as np
 
-    # ---------------------------------------------------------
-    # 1. 静音配置
-    # ---------------------------------------------------------
+
     warnings.filterwarnings('ignore')
     os.environ['PYTHONWARNINGS'] = 'ignore'
 
@@ -35,9 +29,7 @@ def main():
         logger.setLevel(logging.ERROR)
         logger.propagate = False
 
-    # ---------------------------------------------------------
-    # 2. 依赖库
-    # ---------------------------------------------------------
+
     from sklearn.model_selection import StratifiedKFold
     from sklearn.preprocessing import MinMaxScaler, label_binarize
     from sklearn.feature_selection import RFE
@@ -49,11 +41,9 @@ def main():
     )
     from tpot import TPOTClassifier
 
-    # ==========================================
-    # CONFIG — 和原版唯一的两处改动
-    # ==========================================
-    TRAIN_FILE    = str(args.train_csv)          
-    ROOT_SAVE_DIR = str(args.output_dir)              
+
+    TRAIN_FILE    = str(args.train_csv)
+    ROOT_SAVE_DIR = str(args.output_dir)
 
     REPEATS         = 10
     OUTER_FOLDS     = 10
@@ -72,7 +62,7 @@ def main():
         'early_stop':         5,
         'template':           None,
     }
-    # ==========================================
+
 
     os.makedirs(ROOT_SAVE_DIR, exist_ok=True)
 
@@ -87,9 +77,6 @@ def main():
     print("=" * 80)
 
 
-    # ==========================================
-    # 评估函数（和原版完全一致）
-    # ==========================================
     def compute_metrics_audit(y_true, y_pred, y_proba, classes):
         m = {
             'MCC':          float(matthews_corrcoef(y_true, y_pred)),
@@ -120,9 +107,6 @@ def main():
         return m
 
 
-    # ==========================================
-    # 加载数据
-    # ==========================================
     print(f"\n加载训练集: {TRAIN_FILE} ...")
     train_df     = pd.read_csv(TRAIN_FILE)
     drop_cols    = [c for c in ['ProteinID', 'label'] if c in train_df.columns]
@@ -142,9 +126,6 @@ def main():
     print(f"类别分布:\n{pd.Series(y_train_full).value_counts().sort_index()}\n")
 
 
-    # ==========================================
-    # 嵌套 CV 训练（和原版完全一致）
-    # ==========================================
     cv_summary_records = []
     all_fold_pipelines = {}
 
@@ -169,12 +150,12 @@ def main():
             y_tr  = y_train_full[tr_idx]
             y_val = y_train_full[val_idx]
 
-            # Scaler
+
             scaler  = MinMaxScaler()
             X_tr_s  = scaler.fit_transform(X_tr)
             X_val_s = scaler.transform(X_val)
 
-            # RFE
+
             rfe = RFE(
                 estimator=RandomForestClassifier(
                     n_estimators=50,
@@ -189,7 +170,7 @@ def main():
             X_val_sel = rfe.transform(X_val_s)
             selected_features = X_train_full.columns[rfe.get_support()].tolist()
 
-            # TPOT
+
             tpot_clf = TPOTClassifier(random_state=current_seed, **TPOT_CONFIG)
             tpot_clf.fit(X_tr_sel, y_tr)
 
@@ -208,7 +189,7 @@ def main():
             print(f" → Val MCC: {val_metrics['MCC']:.4f}")
             run_cv_scores.append(val_metrics['MCC'])
 
-            # 保存
+
             pipeline_config = {
                 'fold_idx':          fold_idx,
                 'seed':              current_seed,
@@ -242,9 +223,6 @@ def main():
         print(f"  Run {run_id} 平均CV MCC: {run_avg:.4f} ± {run_std:.4f}")
 
 
-    # ==========================================
-    # 汇总
-    # ==========================================
     cv_df = pd.DataFrame(cv_summary_records)
     cv_df.to_csv(os.path.join(ROOT_SAVE_DIR, "nested_cv_results.csv"), index=False)
 

@@ -1,7 +1,3 @@
-"""Evaluate Reference homology-aware TPOT workflows.
-See docs/reference_homology_aware_tpot.md for source and cleanup details.
-"""
-
 import argparse
 from pathlib import Path
 
@@ -38,13 +34,10 @@ def main():
 
     warnings.filterwarnings("ignore")
 
-    # ============================================================
-    # 1. CONFIG
-    # ============================================================
 
-    ROOT_SAVE_DIR = str(args.model_dir)      # your TPOT saved pipeline folder
-    TRAIN_FILE = str(args.train_csv)     # same training file used before
-    TEST_FILE = str(args.test_csv)       # change this to your test file name
+    ROOT_SAVE_DIR = str(args.model_dir)
+    TRAIN_FILE = str(args.train_csv)
+    TEST_FILE = str(args.test_csv)
 
     OUTPUT_DIR = str(args.output_dir)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -52,7 +45,7 @@ def main():
     ID_COLS = ["ProteinID"]
     LABEL_COL = "label"
 
-    # label mapping: must be same as your training code
+
     label_mapping = {
         'Cell.membrane': 0,
         'Cytoplasm': 1,
@@ -71,15 +64,9 @@ def main():
     ALL_CLASSES = np.array(sorted(inverse_label_mapping.keys()))
 
 
-    # ============================================================
-    # 2. Helper functions
-    # ============================================================
-
     def convert_labels(y):
-        """
-        Convert string labels to numeric labels if needed.
-        如果 label 是文字，就转成数字；如果已经是数字，就直接转成 int。
-        """
+
+
         y_series = pd.Series(y)
 
         if not np.issubdtype(y_series.dtype, np.number):
@@ -95,10 +82,8 @@ def main():
 
 
     def get_pipeline_id(pkl_path):
-        """
-        Extract run and fold ID from path like:
-        ./protein_tpot_nohomology/run_01/fold_03/complete_pipeline.pkl
-        """
+
+
         parts = pkl_path.replace("\\", "/").split("/")
         run_id = None
         fold_id = None
@@ -114,10 +99,8 @@ def main():
 
 
     def safe_predict_proba(model, X):
-        """
-        Some TPOT pipelines may not support predict_proba.
-        有些 TPOT pipeline 没有 predict_proba，所以这里安全处理。
-        """
+
+
         if hasattr(model, "predict_proba"):
             try:
                 return model.predict_proba(X)
@@ -127,10 +110,8 @@ def main():
 
 
     def align_proba_to_all_classes(y_proba, model_classes, all_classes):
-        """
-        Align probability columns to global class order.
-        把 predict_proba 的列顺序对齐到 0-10 的全局类别顺序。
-        """
+
+
         if y_proba is None:
             return None
 
@@ -147,10 +128,8 @@ def main():
 
 
     def compute_overall_metrics(y_true, y_pred, y_proba=None, classes=ALL_CLASSES):
-        """
-        Overall multi-class test metrics.
-        整体多分类指标。
-        """
+
+
         m = {
             "MCC": matthews_corrcoef(y_true, y_pred),
             "Accuracy": accuracy_score(y_true, y_pred),
@@ -189,10 +168,8 @@ def main():
 
 
     def compute_per_location_metrics(y_true, y_pred, classes=ALL_CLASSES):
-        """
-        Per-location one-vs-rest metrics.
-        每个 location 单独看成 one-vs-rest，计算该位置自己的 MCC / F1 / precision / recall。
-        """
+
+
         records = []
 
         for cls in classes:
@@ -217,10 +194,6 @@ def main():
 
         return pd.DataFrame(records)
 
-
-    # ============================================================
-    # 3. Load train/test feature structure
-    # ============================================================
 
     print("=" * 80)
     print("Loading train/test data")
@@ -251,10 +224,6 @@ def main():
     print(pd.Series(y_test).map(inverse_label_mapping).value_counts())
 
 
-    # ============================================================
-    # 4. Find all saved TPOT pipelines
-    # ============================================================
-
     pkl_files = sorted(
         glob.glob(os.path.join(ROOT_SAVE_DIR, "run_*", "fold_*", "complete_pipeline.pkl"))
     )
@@ -268,10 +237,6 @@ def main():
             f"No complete_pipeline.pkl files found under: {ROOT_SAVE_DIR}/run_*/fold_*/"
         )
 
-
-    # ============================================================
-    # 5. Evaluate each pipeline on test set
-    # ============================================================
 
     overall_records = []
     per_location_records = []
@@ -290,7 +255,7 @@ def main():
             selected_features = pipe_obj.get("selected_features", None)
             val_metrics = pipe_obj.get("val_metrics", {})
 
-            # Apply the exact same preprocessing as training
+
             X_test_scaled = scaler.transform(X_test)
             X_test_selected = rfe.transform(X_test_scaled)
 
@@ -301,7 +266,7 @@ def main():
             model_classes = getattr(model, "classes_", ALL_CLASSES)
             y_proba = align_proba_to_all_classes(y_proba_raw, model_classes, ALL_CLASSES)
 
-            # Overall metrics
+
             overall_m = compute_overall_metrics(
                 y_true=y_test,
                 y_pred=y_pred,
@@ -320,14 +285,14 @@ def main():
             row.update(overall_m)
             overall_records.append(row)
 
-            # Per-location metrics
+
             per_loc_df = compute_per_location_metrics(y_test, y_pred, classes=ALL_CLASSES)
             per_loc_df.insert(0, "pipeline_id", pipeline_id)
             per_loc_df.insert(1, "run_id", run_id)
             per_loc_df.insert(2, "fold_id", fold_id)
             per_location_records.append(per_loc_df)
 
-            # Save sample-level predictions
+
             tmp_pred_df = pd.DataFrame({
                 "pipeline_id": pipeline_id,
                 "run_id": run_id,
@@ -356,10 +321,6 @@ def main():
             })
 
 
-    # ============================================================
-    # 6. Save full result tables
-    # ============================================================
-
     overall_df = pd.DataFrame(overall_records)
     overall_df = overall_df.sort_values("MCC", ascending=False, na_position="last")
 
@@ -379,10 +340,6 @@ def main():
     print(per_location_all_path)
     print(predictions_path)
 
-
-    # ============================================================
-    # 7. Mean per-location metrics across all pipelines
-    # ============================================================
 
     per_location_mean_df = (
         per_location_all_df
@@ -411,10 +368,6 @@ def main():
     print("=" * 80)
     print(per_location_mean_df)
 
-
-    # ============================================================
-    # 8. Best pipeline by test MCC
-    # ============================================================
 
     valid_overall_df = overall_df.dropna(subset=["MCC"]).copy()
 
@@ -456,10 +409,6 @@ def main():
     print(best_per_location_path)
     print(best_predictions_path)
 
-
-    # ============================================================
-    # 9. Optional: compare validation MCC vs test MCC
-    # ============================================================
 
     compare_path = os.path.join(OUTPUT_DIR, "tpot_val_vs_test_mcc.csv")
 

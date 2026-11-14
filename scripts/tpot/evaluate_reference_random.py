@@ -1,7 +1,3 @@
-"""Evaluate the 100 saved Reference Random TPOT workflows.
-Extracted from the supplied final tpot_rfe.ipynb; original modelling settings retained.
-"""
-
 import argparse
 from pathlib import Path
 
@@ -19,11 +15,6 @@ def main():
         parser.error(f"Missing {len(missing)} fitted workflow files. First: {missing[0]}")
     print("The best_pipeline_result export is a retrospective test-MCC maximum, not independent model selection.")
 
-    # ============================================================
-    # TPOT + Random Split: Test Set Per-Location Evaluation
-    # 目的：读取已训练的TPOT pipeline，在test set上重新评估，
-    #       生成与auto-sklearn格式完全一致的per-location结果文件
-    # ============================================================
 
     import os
     import json
@@ -42,33 +33,24 @@ def main():
 
     warnings.filterwarnings('ignore')
 
-    # ============================================================
-    # ★★★ 路径配置区域 —— 所有路径在这里修改 ★★★
-    # ============================================================
 
-    # [修改1] TPOT Random Split 训练结果根目录
-    # 也就是你代码里 ROOT_SAVE_DIR 对应的文件夹
-    TPOT_ROOT_DIR = str(args.model_dir)  # ← 修改这里
+    TPOT_ROOT_DIR = str(args.model_dir)
 
-    # [修改2] Test set CSV文件路径
-    # 格式要求：包含 ProteinID、label 列，其余列为特征
-    TEST_CSV_PATH = str(args.test_csv)  # ← 修改这里
 
-    # [修改3] 输出文件夹路径
-    # 建议命名风格与 auto-sklearn 结果文件夹保持一致
-    OUTPUT_DIR = str(args.output_dir)  # ← 修改这里
+    TEST_CSV_PATH = str(args.test_csv)
 
-    # [修改4] 实验基本信息（用于输出文件中的标识列，保持与auto-sklearn一致）
+
+    OUTPUT_DIR = str(args.output_dir)
+
+
     AUTOML_METHOD = "TPOT"
-    SPLIT_TYPE    = "random"  # 如果是homology split改成 "homology"
+    SPLIT_TYPE    = "random"
 
-    # [修改5] 重复次数和折数（必须与训练时保持一致）
-    REPEATS     = 10   # ← 修改这里（与训练脚本中 REPEATS 一致）
-    OUTER_FOLDS = 10   # ← 修改这里（与训练脚本中 OUTER_FOLDS 一致）
 
-    # ============================================================
-    # 初始化输出文件夹
-    # ============================================================
+    REPEATS     = 10
+    OUTER_FOLDS = 10
+
+
     output_path = Path(OUTPUT_DIR)
     output_path.mkdir(parents=True, exist_ok=True)
     best_pipeline_dir = output_path / "best_pipeline_result"
@@ -81,31 +63,22 @@ def main():
     print(f"输出目录    : {OUTPUT_DIR}")
     print("=" * 70)
 
-    # ============================================================
-    # 加载 Test Set
-    # ============================================================
+
     print("\n[1] 加载 Test Set...")
     test_df = pd.read_csv(TEST_CSV_PATH)
 
-    # 提取标签和特征
-    # [注意] 列名与训练脚本保持一致：ProteinID、label
+
     y_test = test_df['label'].values
     X_test_full = test_df.drop(['ProteinID', 'label'], axis=1)
 
     print(f"    Test set shape : {X_test_full.shape}")
     print(f"    类别分布：\n{pd.Series(y_test).value_counts().sort_index()}")
 
-    # ============================================================
-    # 辅助函数：计算单个 location 的混淆矩阵指标
-    # ============================================================
+
     def compute_per_location_metrics(y_true, y_pred, class_id, location_name,
                                       run_fold_label, run_id, fold_id):
-        """
-        对单个 location 计算 one-vs-rest 的 MCC、Precision、Recall、F1
-        以及 TP、FP、FN、TN、Support
-        输出格式与 auto-sklearn per_location_metrics_all_pipelines.csv 完全一致
-        """
-        # one-vs-rest 二值化
+
+
         y_true_bin = (y_true == class_id).astype(int)
         y_pred_bin = (y_pred == class_id).astype(int)
 
@@ -135,9 +108,6 @@ def main():
         }
 
 
-    # ============================================================
-    # 辅助函数：计算 overall pipeline metrics（与auto-sklearn列名一致）
-    # ============================================================
     def compute_overall_metrics(y_true, y_pred, run_fold_label, run_id, fold_id):
         mcc      = float(matthews_corrcoef(y_true, y_pred))
         acc      = float(accuracy_score(y_true, y_pred))
@@ -161,16 +131,13 @@ def main():
         }
 
 
-    # ============================================================
-    # 主循环：遍历所有 run / fold，加载 pipeline，在 test set 上评估
-    # ============================================================
     print("\n[2] 开始遍历 pipelines...")
 
-    overall_records     = []   # 汇总 overall metrics
-    per_location_records = []  # 汇总 per-location metrics
-    failed_pipelines    = []   # 记录失败的 pipeline
+    overall_records     = []
+    per_location_records = []
+    failed_pipelines    = []
 
-    # 用于记录 best pipeline（以 test MCC 为准）
+
     best_mcc      = -np.inf
     best_pipeline_info = None
 
@@ -179,10 +146,10 @@ def main():
 
             run_fold_label = f"R{run_id}_F{fold_id}"
 
-            # [路径] 拼接 pkl 文件路径
+
             pkl_path = Path(TPOT_ROOT_DIR) / f"run_{run_id:02d}" / f"fold_{fold_id:02d}" / "complete_pipeline.pkl"
 
-            # 如果文件不存在，记录并跳过（不崩溃）
+
             if not pkl_path.exists():
                 msg = f"[MISSING] {pkl_path}"
                 print(f"  ⚠ {msg}")
@@ -195,7 +162,7 @@ def main():
                 })
                 continue
 
-            # 加载 pkl
+
             try:
                 with open(pkl_path, 'rb') as f:
                     pipeline_config = pickle.load(f)
@@ -210,8 +177,7 @@ def main():
                 })
                 continue
 
-            # 提取组件
-            # [注意] 与训练脚本中 pipeline_config 的 key 保持一致
+
             try:
                 scaler           = pipeline_config['scaler']
                 rfe              = pipeline_config['rfe']
@@ -228,7 +194,7 @@ def main():
                 })
                 continue
 
-            # 对 test set 做同样的预处理（scaler → rfe）
+
             try:
                 X_test_scaled = scaler.transform(X_test_full)
                 X_test_sel    = rfe.transform(X_test_scaled)
@@ -243,7 +209,7 @@ def main():
                 })
                 continue
 
-            # 预测
+
             try:
                 y_pred = model.predict(X_test_sel)
             except Exception as e:
@@ -257,14 +223,14 @@ def main():
                 })
                 continue
 
-            # ---- Overall metrics ----
+
             overall_row = compute_overall_metrics(y_test, y_pred, run_fold_label, run_id, fold_id)
             overall_records.append(overall_row)
 
             test_mcc = overall_row['MCC']
             print(f"  ✓ {run_fold_label}  Test MCC: {test_mcc:.4f}")
 
-            # 判断是否为 best pipeline
+
             if test_mcc > best_mcc:
                 best_mcc = test_mcc
                 best_pipeline_info = {
@@ -276,11 +242,7 @@ def main():
                     'selected_features': selected_features,
                 }
 
-            # ---- Per-location metrics ----
-            # 获取所有类别（class_id 和 location name）
-            # [注意] 这里假设 label 是整数编码，location name 从 class_id 推断
-            # 如果你有 class_id → location name 的映射表，请在下方 LABEL_MAP 中填入
-            # ★★★ 修改6：填入你的 class_id → location name 映射 ★★★
+
             LABEL_MAP = {
                 0 : "Cell.membrane",
                 1 : "Cytoplasm",
@@ -294,7 +256,7 @@ def main():
                 9 : "Peroxisome",
                 10: "Plastid",
             }
-            # 如果 LABEL_MAP 为空，自动从数据中推断（location name 用 class_id 代替）
+
             unique_classes = sorted(np.unique(y_test))
             for class_id in unique_classes:
                 loc_name = LABEL_MAP.get(class_id, f"Location_{class_id}")
@@ -307,9 +269,6 @@ def main():
     print(f"\n  完成！成功: {len(overall_records)}，失败: {len(failed_pipelines)}")
 
 
-    # ============================================================
-    # [3] 保存 overall_pipeline_metrics.csv
-    # ============================================================
     print("\n[3] 保存 overall_pipeline_metrics.csv ...")
     if len(overall_records) != REPEATS * OUTER_FOLDS:
         pd.DataFrame(failed_pipelines).to_csv(output_path / "failed_pipelines.csv", index=False)
@@ -318,9 +277,7 @@ def main():
     overall_df.to_csv(output_path / "overall_pipeline_metrics.csv", index=False)
     print(f"    → 已保存：{output_path / 'overall_pipeline_metrics.csv'}")
 
-    # ============================================================
-    # [4] 保存 overall_pipeline_metrics_summary.csv
-    # ============================================================
+
     print("[4] 保存 overall_pipeline_metrics_summary.csv ...")
     metric_cols = ['MCC', 'Accuracy', 'Balanced_Accuracy',
                    'F1_weighted', 'F1_macro', 'Precision_weighted', 'Recall_weighted']
@@ -339,17 +296,13 @@ def main():
     summary_df.to_csv(output_path / "overall_pipeline_metrics_summary.csv", index=False)
     print(f"    → 已保存：{output_path / 'overall_pipeline_metrics_summary.csv'}")
 
-    # ============================================================
-    # [5] 保存 per_location_metrics_all_pipelines.csv
-    # ============================================================
+
     print("[5] 保存 per_location_metrics_all_pipelines.csv ...")
     per_loc_df = pd.DataFrame(per_location_records)
     per_loc_df.to_csv(output_path / "per_location_metrics_all_pipelines.csv", index=False)
     print(f"    → 已保存：{output_path / 'per_location_metrics_all_pipelines.csv'}")
 
-    # ============================================================
-    # [6] 保存 per_location_metrics_summary.csv（每个location的均值等）
-    # ============================================================
+
     print("[6] 保存 per_location_metrics_summary.csv ...")
     per_loc_summary = (
         per_loc_df
@@ -357,16 +310,14 @@ def main():
         .agg(['mean', 'std', 'median', 'min', 'max'])
         .reset_index()
     )
-    # 展平多级列名
+
     per_loc_summary.columns = [
         '_'.join(col).strip('_') for col in per_loc_summary.columns
     ]
     per_loc_summary.to_csv(output_path / "per_location_metrics_summary.csv", index=False)
     print(f"    → 已保存：{output_path / 'per_location_metrics_summary.csv'}")
 
-    # ============================================================
-    # [7] 保存 best pipeline 的 per-location metrics
-    # ============================================================
+
     print("[7] 保存 best pipeline per-location metrics ...")
     if best_pipeline_info is not None:
         best_label  = best_pipeline_info['run_fold_label']
@@ -385,20 +336,18 @@ def main():
 
         best_per_loc_df = pd.DataFrame(best_per_loc_records)
 
-        # 文件名格式与 auto-sklearn 一致：best_pipeline_R{X}_F{Y}_per_location_metrics.csv
+
         best_filename = f"best_pipeline_{best_label}_per_location_metrics.csv"
         best_per_loc_df.to_csv(best_pipeline_dir / best_filename, index=False)
 
         print(f"    → Best pipeline: {best_label}  (Test MCC = {best_mcc:.4f})")
         print(f"    → 已保存：{best_pipeline_dir / best_filename}")
 
-        # 同时保存 best pipeline 的 overall metrics
+
         best_overall_df = pd.DataFrame([best_pipeline_info['overall_metrics']])
         best_overall_df.to_csv(best_pipeline_dir / f"best_pipeline_{best_label}_overall_metrics.csv", index=False)
 
-    # ============================================================
-    # [8] 保存 failed_pipelines.csv
-    # ============================================================
+
     print("[8] 保存 failed_pipelines.csv ...")
     if failed_pipelines:
         failed_df = pd.DataFrame(failed_pipelines)
@@ -407,9 +356,7 @@ def main():
     else:
         print("    → 无失败记录")
 
-    # ============================================================
-    # 最终汇总打印
-    # ============================================================
+
     print("\n" + "=" * 70)
     print("评估完成！输出文件汇总：")
     print(f"  overall_pipeline_metrics.csv          — {len(overall_df)} 条 pipeline 记录")

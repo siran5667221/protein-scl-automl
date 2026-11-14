@@ -1,7 +1,3 @@
-"""Train Reference homology-aware Auto-sklearn SingleBest workflows.
-Extracted from homology_pipeline_autosklearn.ipynb.
-"""
-
 import argparse
 from pathlib import Path
 
@@ -16,12 +12,6 @@ def main():
     if args.output_dir.exists() and any(args.output_dir.iterdir()):
         parser.error("Output directory is not empty. Choose a new directory; the original training loop has no resume mode.")
 
-    """
-    Protein Subcellular Localisation — AutoSklearn Training
-    =======================================================
-    使用非同源训练集 Train_Features_NoHomology.csv 重新训练100个 pipeline
-    训练集：Train_Features_NoHomology.csv  （非同源，更严格）
-    """
 
     import os
     import json
@@ -31,9 +21,7 @@ def main():
     import pandas as pd
     import numpy as np
 
-    # ---------------------------------------------------------
-    # 1. 静音配置
-    # ---------------------------------------------------------
+
     warnings.filterwarnings('ignore')
     os.environ['PYTHONWARNINGS'] = 'ignore'
 
@@ -42,9 +30,7 @@ def main():
         logger.setLevel(logging.ERROR)
         logger.propagate = False
 
-    # ---------------------------------------------------------
-    # 2. 依赖库
-    # ---------------------------------------------------------
+
     from sklearn.model_selection import StratifiedKFold
     from sklearn.preprocessing import MinMaxScaler, label_binarize
     from sklearn.feature_selection import RFE
@@ -59,13 +45,10 @@ def main():
     from autosklearn.metrics import make_scorer
     from autosklearn.ensembles.singlebest_ensemble import SingleBest
 
-    # ==========================================
-    # CONFIG — 只需修改这里
-    # ==========================================
-    # ↓↓↓ 唯一的改动：换成非同源训练集 ↓↓↓
+
     TRAIN_FILE = str(args.train_csv)
 
-    ROOT_SAVE_DIR  = str(args.output_dir)  # 新文件夹，不覆盖旧结果
+    ROOT_SAVE_DIR  = str(args.output_dir)
     REPEATS        = 10
     OUTER_FOLDS    = 10
     TARGET_FEATURES = 100
@@ -90,7 +73,7 @@ def main():
                                    ),
         'memory_limit':            60000,
     }
-    # ==========================================
+
 
     os.makedirs(ROOT_SAVE_DIR, exist_ok=True)
 
@@ -105,9 +88,6 @@ def main():
     print("=" * 80)
 
 
-    # ==========================================
-    # 评估函数（和原来完全一致）
-    # ==========================================
     def compute_metrics_audit(y_true, y_pred, y_proba, classes):
         m = {
             'MCC':          float(matthews_corrcoef(y_true, y_pred)),
@@ -134,9 +114,6 @@ def main():
         return m
 
 
-    # ==========================================
-    # 加载数据 — 只用非同源训练集
-    # ==========================================
     print(f"\n加载训练集: {TRAIN_FILE} ...")
     train_df = pd.read_csv(TRAIN_FILE)
 
@@ -144,7 +121,7 @@ def main():
     X_train_full = train_df.drop(columns=drop_cols)
     y_train_full = train_df[LABEL_COL].values
 
-    # 如果 label 是字符串，先映射
+
     if not np.issubdtype(y_train_full.dtype, np.number):
         mapping = {
             'Cell.membrane': 0, 'Cytoplasm': 1, 'Cytoplasm-Nucleus': 2,
@@ -158,9 +135,6 @@ def main():
     print(f"类别分布:\n{pd.Series(y_train_full).value_counts().sort_index()}\n")
 
 
-    # ==========================================
-    # 嵌套 CV 训练（和原来逻辑完全一致）
-    # ==========================================
     cv_summary_records = []
     run_summaries      = []
 
@@ -187,12 +161,12 @@ def main():
             y_tr  = y_train_full[tr_idx]
             y_val = y_train_full[val_idx]
 
-            # Scaler
+
             scaler   = MinMaxScaler()
             X_tr_s   = scaler.fit_transform(X_tr)
             X_val_s  = scaler.transform(X_val)
 
-            # RFE
+
             rfe = RFE(
                 estimator=RandomForestClassifier(
                     n_estimators=50,
@@ -209,7 +183,7 @@ def main():
 
             selected_features = X_train_full.columns[rfe.get_support()].tolist()
 
-            # AutoSklearn
+
             clf = autosklearn.classification.AutoSklearnClassifier(
                 seed=current_seed,
                 **AUTOSKLEARN_CONFIG
@@ -217,7 +191,7 @@ def main():
             clf.fit(X_tr_sel, y_tr)
             del X_tr_sel
 
-            # 验证集评估
+
             classes     = clf.classes_
             y_val_pred  = clf.predict(X_val_sel)
             y_val_proba = clf.predict_proba(X_val_sel)
@@ -227,7 +201,7 @@ def main():
             print(f" → Val MCC: {val_metrics['MCC']:.4f}")
             run_cv_scores.append(val_metrics['MCC'])
 
-            # 保存完整 pipeline
+
             pipeline_config = {
                 'fold_idx':         fold_idx,
                 'seed':             current_seed,
@@ -236,7 +210,7 @@ def main():
                 'selected_features':selected_features,
                 'model':            clf,
                 'val_metrics':      val_metrics,
-                'train_file':       TRAIN_FILE,   # 记录用了哪个训练集
+                'train_file':       TRAIN_FILE,
             }
 
             with open(os.path.join(fold_dir, "complete_pipeline.pkl"), "wb") as f:
@@ -259,9 +233,6 @@ def main():
         run_summaries.append({'run_id': run_id, 'cv_mcc_mean': run_avg_mcc, 'cv_mcc_std': run_std_mcc})
 
 
-    # ==========================================
-    # 汇总
-    # ==========================================
     cv_df = pd.DataFrame(cv_summary_records)
     cv_df.to_csv(os.path.join(ROOT_SAVE_DIR, "nested_cv_results.csv"), index=False)
 

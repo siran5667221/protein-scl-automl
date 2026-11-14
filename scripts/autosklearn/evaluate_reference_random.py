@@ -1,7 +1,3 @@
-"""Evaluate saved Reference Random Auto-sklearn workflows.
-Extracted from final_ref_autosklearn.ipynb; original modelling settings retained.
-"""
-
 import argparse
 from pathlib import Path
 
@@ -16,11 +12,6 @@ def main():
         parser.error(f"Test CSV not found: {args.test_csv}")
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    """
-    Per-Class MCC Evaluation across 100 Pipelines
-    ==============================================
-    计算每个亚细胞定位类别的 MCC 均值 ± 标准差
-    """
 
     import os
     import pickle
@@ -35,9 +26,7 @@ def main():
         average_precision_score
     )
 
-    # ══════════════════════════════════════════════════════
-    # CONFIG — 只需修改这里
-    # ══════════════════════════════════════════════════════
+
     ROOT_SAVE_DIR = str(args.model_dir)
     TEST_FILE     = str(args.test_csv)
     REPEATS       = 10
@@ -49,12 +38,8 @@ def main():
         6: 'Lysosome/Vacuole',      7: 'Mitochondrion',   8: 'Nucleus',
         9: 'Peroxisome',           10: 'Plastid'
     }
-    # ══════════════════════════════════════════════════════
 
 
-    # ──────────────────────────────────────────────────────
-    # 加载测试集
-    # ──────────────────────────────────────────────────────
     print(f"加载测试集: {TEST_FILE}")
     test_df      = pd.read_csv(TEST_FILE)
     X_test_full  = test_df.drop(columns=["ProteinID", "label"], errors="ignore")
@@ -63,12 +48,8 @@ def main():
     print(f"测试集: {X_test_full.shape}  类别数: {len(np.unique(y_test_full))}")
 
 
-    # ──────────────────────────────────────────────────────
-    # 工具函数
-    # ──────────────────────────────────────────────────────
-
     def per_class_mcc(y_true, y_pred, classes):
-        """每个类别单独计算 MCC（OvR 二值化）"""
+
         results = []
         for c in classes:
             y_true_bin = (y_true == c).astype(int)
@@ -111,9 +92,6 @@ def main():
         return m
 
 
-    # ──────────────────────────────────────────────────────
-    # 主循环：100个 pipeline
-    # ──────────────────────────────────────────────────────
     print(f"\n{'='*60}")
     print(f"开始评估：{REPEATS * OUTER_FOLDS} 个 Pipeline")
     print(f"{'='*60}")
@@ -139,7 +117,7 @@ def main():
                 with open(pkl_path, "rb") as f:
                     pipe = pickle.load(f)
 
-                # scaler → rfe → model
+
                 X_s    = pipe['scaler'].transform(X_test_full)
                 X_sel  = pipe['rfe'].transform(X_s)
                 y_pred = pipe['model'].predict(X_sel)
@@ -148,7 +126,7 @@ def main():
                 if hasattr(pipe['model'], "predict_proba"):
                     y_proba = pipe['model'].predict_proba(X_sel)
 
-                # 整体指标
+
                 metrics = compute_metrics_audit(y_test_full, y_pred, y_proba, classes)
                 all_test_records.append({
                     'Run_Fold':   f"R{run_id}_F{fold_idx}",
@@ -159,7 +137,7 @@ def main():
                     'Accuracy':   metrics.get('Accuracy'),
                 })
 
-                # per-class MCC
+
                 df_mcc             = per_class_mcc(y_test_full, y_pred, classes)
                 df_mcc["Run_Fold"] = f"R{run_id}_F{fold_idx}"
                 all_class_mcc.append(df_mcc)
@@ -170,9 +148,6 @@ def main():
                 print(f"  ERR R{run_id}_F{fold_idx}: {e}")
 
 
-    # ──────────────────────────────────────────────────────
-    # 汇总：整体指标
-    # ──────────────────────────────────────────────────────
     res_df = pd.DataFrame(all_test_records)
 
     print("\n" + "="*60)
@@ -199,9 +174,6 @@ def main():
     print(pd.DataFrame(stats_list).to_string(index=False))
 
 
-    # ──────────────────────────────────────────────────────
-    # 汇总：per-class MCC
-    # ──────────────────────────────────────────────────────
     df_all   = pd.concat(all_class_mcc, ignore_index=True)
     summary  = (
         df_all.groupby("location")["MCC"]
@@ -217,9 +189,6 @@ def main():
     print(summary.to_string(index=False))
 
 
-    # ──────────────────────────────────────────────────────
-    # 保存
-    # ──────────────────────────────────────────────────────
     res_df.to_csv(os.path.join(args.output_dir, "full_multi_metric_test_results.csv"), index=False)
     df_all.to_csv(os.path.join(args.output_dir, "per_class_mcc_all_pipelines.csv"),    index=False)
     summary.to_csv(os.path.join(args.output_dir, "per_class_mcc_summary.csv"),          index=False)
