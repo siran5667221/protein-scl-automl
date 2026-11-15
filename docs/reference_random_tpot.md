@@ -22,7 +22,7 @@ Default locations, relative to the repository root:
 - RF: 50 trees, balanced class weights, n_jobs=-1, seed = repeat × 100 + fold.
 - RF-RFE: 100 features; step=0.1.
 - TPOT: 100 generations, population_size=50, offspring_size=None, MCC scoring, internal cv=10, max_time_mins=120, max_eval_time_mins=10, early_stop=5, n_jobs=-1, template=None, verbosity=0, seed matching RF-RFE.
-- No `config_dict` is specified. This script must not be described as explicitly using TPOT light.
+- No `config_dict` is specified.
 - Scaling and RF-RFE precede TPOT internal CV. They are not refitted separately within TPOT internal folds. The outer validation and test data do not fit these preprocessing steps.
 - The notebook reports TPOT 0.12.2. Exact remaining dependency versions still need to be recovered from the original environment. No unverified dependency pins are provided here.
 
