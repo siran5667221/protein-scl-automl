@@ -1,0 +1,21 @@
+feature_type,error
+binary,binary descriptor need fasta sequence with equal length.
+binary_6bit,binary descriptor need fasta sequence with equal length.
+binary_5bit type 1,binary descriptor need fasta sequence with equal length.
+binary_5bit type 2,binary descriptor need fasta sequence with equal length.
+binary_3bit type 1,binary descriptor need fasta sequence with equal length.
+binary_3bit type 2,binary descriptor need fasta sequence with equal length.
+binary_3bit type 3,binary descriptor need fasta sequence with equal length.
+binary_3bit type 4,binary descriptor need fasta sequence with equal length.
+binary_3bit type 5,binary descriptor need fasta sequence with equal length.
+binary_3bit type 6,binary descriptor need fasta sequence with equal length.
+binary_3bit type 7,binary descriptor need fasta sequence with equal length.
+AESNN3,AESNN3 descriptor need fasta sequence with equal length.
+OPF_10bit,OPF descriptor need fasta sequence with equal length.
+OPF_7bit type 1,OPF descriptor need fasta sequence with equal length.
+OPF_7bit type 2,OPF descriptor need fasta sequence with equal length.
+OPF_7bit type 3,OPF descriptor need fasta sequence with equal length.
+AAIndex,AAIndex descriptor need fasta sequence with equal length.
+BLOSUM62,BLOSUM62 descriptor need fasta sequence with equal length.
+ZScale,ZScale descriptor need fasta sequence with equal length.
+KNN,KNN descriptor need fasta sequence with equal length.
