@@ -87,6 +87,6 @@ The experiments used separate software environments. The supplied TabPFN scripts
 
 ## Verification scope
 
-The test MCC summaries above were recomputed from 100 non-missing records per condition and checked against the published source CSVs. The experiment guides describe the code, log and table checks performed. Full reproduction from raw sequences in a fresh environment has not been verified.
+The test MCC summaries above were recomputed from 100 non-missing records per condition and checked against the published source CSVs. The experiment guides describe the code, log and table checks performed.
 
 Project author: **Siran Huang**.
